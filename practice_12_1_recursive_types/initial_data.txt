@@ -1,0 +1,83 @@
+
+
+Оператор неподвижной точки для типов
+
+newtype Fix f = In (f (Fix f))
+
+deriving instance Show (f (Fix f)) => Show (Fix f)
+deriving instance Eq (f (Fix f)) => Eq (Fix f)
+
+out :: Fix f -> f (Fix f)
+out (In x) = x
+
+Для удобства работы с рекурсивными типами, построенными с помощью Fix, полезно подключить расширения StandaloneDeriving, FlexibleContexts, UndecidableInstances.
+
+Для описания рекурсивного типа, эквивалентного, например, data Nat = Z | S Nat, задаём нерекурсивный тип
+
+data N x = Z | S x
+
+instance Functor N where
+  fmap g  Z    = Z
+  fmap g (S x) = S (g x)
+
+и вводим рекурсивный через неподвижную точку функтора N на уровне типов:
+
+type Nat = Fix N
+---------------------------------------------------------------------------------------------------------
+
+
+Катаморфизм
+
+cata :: Functor f => (f a -> a) -> Fix f -> a
+cata phi (In x) = phi $ fmap (cata phi) x
+
+Функцию phi :: f a -> a называют f-алгеброй, например
+
+phiN :: N Int -> Int
+phiN Z     = 0
+phiN (S n) = succ n
+
+natToInt :: Nat -> Int
+natToInt = cata phiN
+
+Анаморфизм
+
+ana :: Functor f => (a -> f a) -> a -> Fix f
+ana psi x = In $ fmap (ana psi) (psi x)
+
+Функцию psi :: a -> f a называют f-коалгеброй, например
+
+psiN :: Int -> N Int
+psiN 0 = Z
+psiN n = S (n-1)
+
+intToNat :: Int -> Nat
+intToNat = ana psiN
+
+Гилеморфизм
+
+hylo :: Functor f => (f a -> a) -> (b -> f b) -> (b -> a)
+hylo phi psi = cata phi . ana psi
+---------------------------------------------------------------------------------------------------------
+Дано
+{-# LANGUAGE StandaloneDeriving, FlexibleContexts, UndecidableInstances #-}
+newtype Fix f = In (f (Fix f))
+
+deriving instance Show (f (Fix f)) => Show (Fix f)
+deriving instance Eq (f (Fix f)) => Eq (Fix f)
+
+out :: Fix f -> f (Fix f)
+out (In x) = x
+
+type Algebra f a = f a -> a
+
+cata :: Functor f => Algebra f a -> Fix f -> a
+cata phi (In x) = phi $ fmap (cata phi) x
+
+type Coalgebra f a = a -> f a 
+
+ana :: Functor f => Coalgebra f a -> a -> Fix f
+ana psi x = In $ fmap (ana psi) (psi x)
+
+hylo :: Functor f => Algebra f a -> Coalgebra f b -> (b -> a)
+hylo phi psi = cata phi . ana psi
